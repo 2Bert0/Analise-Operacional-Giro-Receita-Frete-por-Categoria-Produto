@@ -1,51 +1,28 @@
-# Previsão de Atraso de Pedidos no E-Commerce (Machine Learning Supervisionado)
+# Análise Operacional de Giro, Receita e Frete por Categoria e Produto
 
-## Visão Geral do Negócio
-Em operações de e-commerce, atrasos na entrega impactam diretamente a retenção de clientes, aumentam custos com suporte/reclamações e desgastam a reputação da marca. Este projeto aplica **Machine Learning supervisionado** sobre dados públicos do e-commerce brasileiro (**Olist**) para estimar o risco de atraso na entrega a partir de informações disponíveis no momento ou logo após a compra — sem vazamento de dados (*data leakage*).
+## Objetivo e Problema de Negócio
+Avaliar o desempenho comercial e logístico de vendas na base pública da Olist para identificar:
+- Quais categorias concentram maior receita e volume de itens vendidos (giro).
+- Onde o frete pesa mais proporcionalmente sobre o preço do produto (`peso_frete = frete_total / receita_total`), sinalizando possível atrito comercial ou oportunidade de ajuste logístico.
+- Quais variáveis mais se destacam na modelagem (`mes_compra`, `prazo_estimado_dias`, `valor_frete`, `proporcao_frete`, `valor_produtos`) e como se distribui o giro no nível de produto (`product_id`) para evitar decisões de sortimento baseadas apenas em médias agregadas.
 
----
+## Etapas e Decisões Metodológicas
+1. **Granularidade e limpeza de vendas válidas:** Cruzamento no nível de item de pedido (`order_item`) filtrando pedidos não cancelados (`order_status != 'canceled'`) e enriquecendo com categoria e peso do produto, evitando inflar faturamento e volume com vendas inválidas.
+2. **Métricas de categoria e classificação de giro:** Cálculo de itens vendidos, pedidos únicos, receita total, frete total, ticket médio, peso relativo do frete (`frete / receita`) e classificação relativa de giro pela mediana para não confundir categorias de alto volume com categorias de ticket elevado.
+3. **Visualização comparativa em dois painéis:** Gráfico horizontal em dois painéis (`receita_total` e `peso_frete` nas Top 10 categorias) para evitar misturar escalas diferentes e destacar o risco de ignorar a cauda longa fora do Top 10.
+4. **Concentração de giro por SKU (Pareto), importância de variáveis e exportação:** Agregação por `product_id` e `categoria` para medir a concentração de unidades vendidas, visualização das Top 5 variáveis mais importantes no modelo (`top5_variaveis_importantes.png`) e exportação das tabelas consolidadas em CSV e da curva de Pareto em PNG.
 
-## Dados e Preparação
-* **Base analisada:** 96.476 pedidos efetivamente entregues com data estimada válida.
-* **Variável alvo (`atrasou`):** `1` quando a entrega ao cliente ocorreu após a data estimada (`order_delivered_customer_date > order_estimated_delivery_date`) e `0` caso contrário.
-* **Desbalanceamento de classes:** **8,11%** dos pedidos atrasaram (`1`) e **91,89%** foram entregues no prazo ou antecipados (`0`).
-* **Engenharia de features (sem vazamento):** prazo estimado em dias, dia da semana e mês da compra, quantidade de itens, valor dos produtos, valor do frete, proporção do frete sobre o valor dos produtos, indicador de mesma UF (`mesma_uf`) e dimensões/peso do produto.
-* **Validação:** divisão estratificada (`80%` treino / `20%` teste) e imputação de valores ausentes pela mediana dentro de `Pipeline` do `scikit-learn`.
+## Principais Resultados
+- **Volume e catálogo:** `112.108` linhas de itens vendidos válidas, distribuídas em `73` categorias e `32.735` SKUs distintos com venda.
+- **Contraste entre categorias no Top 10 por receita:** Categorias como `moveis_decoracao` (`peso_frete = 0.24`) e `utilidades_domesticas` (`peso_frete = 0.23`) têm peso de frete alto sobre a receita, enquanto `relogios_presentes` combina ticket médio elevado (`R$ 200,70`) com peso de frete baixo (`0.08`).
+- **Concentração do giro (Pareto):** Os **20% produtos mais vendidos (`6.547` SKUs)** concentram **67,2%** de todo o giro de unidades, enquanto os demais `80%` (`26.188` SKUs) dividem os `32,8%` restantes.
+- **Variáveis de maior importância:** `mes_compra` (`0.2376`), `prazo_estimado_dias` (`0.2284`), `valor_frete` (`0.1014`), `proporcao_frete` (`0.0697`) e `valor_produtos` (`0.0677`).
 
----
+## Limitações e Recomendações Práticas
+- **Limitação da base:** A base da Olist não contém o custo de aquisição dos produtos (CMV), logo a análise avalia receita, giro e peso de frete — não lucro líquido real.
+- **Ação prática:** Evitar cortar uma categoria inteira (como `ferramentas_jardim`) apenas pela média de frete ou posição no Top 10; em vez disso, revisar regras de frete/região, testar kits/cross-sell para diluir frete e separar SKUs de alto giro dos itens de baixa saída.
 
-## Modelagem e Resultados
-Como a base é desbalanceada (~8,11% de atrasos), o foco da avaliação foi além da acurácia global, acompanhando **ROC-AUC**, **Precision**, **Recall** e **F1-Score** para a classe de atraso (`1`):
+## Ferramentas e Artefatos Gerados
+- **Stack:** Python, `pandas`, `matplotlib`, `seaborn`, `kagglehub` (Google Colab).
+- **Arquivos gerados:** `resumo_categorias_giro_frete.csv`, `resumo_produtos_pareto.csv`, `analise_categorias_frete.png`, `curva_pareto_giro_produtos.png` e `top5_variaveis_importantes.png`.
 
-| Modelo | ROC-AUC | Precision (Classe 1) | Recall (Classe 1) | F1-Score (Classe 1) | Acurácia |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Regressão Logística (Baseline)** | `0.6283` | `0.111` | `0.599` | `0.188` | `0.579` |
-| **Random Forest** | `0.7351` | `0.214` | `0.493` | `0.298` | `0.812` |
-
-O **Random Forest** superou o baseline linear em capacidade discriminativa (`ROC-AUC` de `0.6283` para `0.7351`), equilíbrio entre precisão e recall (`F1-Score` de `0.188` para `0.298`) e acurácia geral (`81.2%`).
-
----
-
-## Principais Fatores de Atraso
-As **5 variáveis mais importantes** no Random Forest concentram cerca de **70,5%** da importância total do modelo:
-1. **`mes_compra` (`0.2376`):** efeito de sazonalidade e períodos de maior pressão operacional/climática.
-2. **`prazo_estimado_dias` (`0.2284`):** relação direta entre a promessa de prazo e o risco de estouro.
-3. **`valor_frete` (`0.1014`):** reflexo de distância, peso ou complexidade logística.
-4. **`proporcao_frete` (`0.0697`):** peso relativo do frete frente ao valor do pedido.
-5. **`valor_produtos` (`0.0677`):** características do ticket/composição do pedido.
-
-![Importância das Variáveis na Previsão de Atraso](feature_importance_atraso.png)
-
----
-
-## Recomendações Práticas para o Negócio
-* **Ajuste sazonal de prazos e capacidade:** revisar margens de prazo estimado e reforçar capacidade logística nos meses de maior incidência de atrasos (`mes_compra`).
-* **Monitoramento preventivo de alto risco:** priorizar acompanhamento de pedidos com maior probabilidade prevista pelo modelo — especialmente rotas/itens com frete elevado e prazos apertados — para agir antes da falha ou enviar comunicação proativa ao cliente.
-
----
-
-## Stack Utilizada
-* **Linguagem & Manipulação:** Python, Pandas
-* **Machine Learning:** Scikit-Learn (`Pipeline`, `SimpleImputer`, `train_test_split`, `LogisticRegression`, `RandomForestClassifier`, métricas de classificação e ROC-AUC)
-* **Visualização:** Matplotlib, Seaborn
-* **Ambiente:** Google Colab e GitHub
