@@ -1,28 +1,26 @@
-# Análise Operacional de Giro, Receita e Frete por Categoria e Produto
+# Análise Operacional de Giro, Receita e Frete por Categoria e Produto (Olist)
 
 ## Objetivo e Problema de Negócio
-Avaliar o desempenho comercial e logístico de vendas na base pública da Olist para identificar:
-- Quais categorias concentram maior receita e volume de itens vendidos (giro).
-- Onde o frete pesa mais proporcionalmente sobre o preço do produto (`peso_frete = frete_total / receita_total`), sinalizando possível atrito comercial ou oportunidade de ajuste logístico.
-- Quais variáveis mais se destacam na modelagem (`mes_compra`, `prazo_estimado_dias`, `valor_frete`, `proporcao_frete`, `valor_produtos`) e como se distribui o giro no nível de produto (`product_id`) para evitar decisões de sortimento baseadas apenas em médias agregadas.
+Avaliar o desempenho comercial e logístico de vendas na base pública da Olist para responder:
+- Quais categorias geram maior receita total e volume de itens vendidos (giro)?
+- Onde o frete pesa mais proporcionalmente sobre o valor dos produtos (`peso_frete = frete_total / receita_total`), indicando possível atrito comercial ou oportunidade de ajuste logístico?
+- Como o giro de unidades se concentra entre os produtos (`product_id`) para evitar decisões de sortimento e estoque baseadas apenas em médias gerais?
 
 ## Etapas e Decisões Metodológicas
-1. **Granularidade e limpeza de vendas válidas:** Cruzamento no nível de item de pedido (`order_item`) filtrando pedidos não cancelados (`order_status != 'canceled'`) e enriquecendo com categoria e peso do produto, evitando inflar faturamento e volume com vendas inválidas.
-2. **Métricas de categoria e classificação de giro:** Cálculo de itens vendidos, pedidos únicos, receita total, frete total, ticket médio, peso relativo do frete (`frete / receita`) e classificação relativa de giro pela mediana para não confundir categorias de alto volume com categorias de ticket elevado.
-3. **Visualização comparativa em dois painéis:** Gráfico horizontal em dois painéis (`receita_total` e `peso_frete` nas Top 10 categorias) para evitar misturar escalas diferentes e destacar o risco de ignorar a cauda longa fora do Top 10.
-4. **Concentração de giro por SKU (Pareto), importância de variáveis e exportação:** Agregação por `product_id` e `categoria` para medir a concentração de unidades vendidas, visualização das Top 5 variáveis mais importantes no modelo (`top5_variaveis_importantes.png`) e exportação das tabelas consolidadas em CSV e da curva de Pareto em PNG.
+1. **Filtragem de pedidos válidos e granularidade de item:** Remoção de pedidos com status `canceled` antes do cruzamento com `items` (`how="inner"`), mantendo a granularidade no nível de item de pedido e enriquecendo com categoria e peso do produto (`how="left"`).
+2. **Agregação por categoria e classificação de giro:** Cálculo de `itens_vendidos`, `pedidos_unicos`, `receita_total`, `frete_total`, `ticket_medio`, `peso_frete` (com proteção contra divisão por zero) e `perfil_giro` (`Alto Giro` vs. `Baixo Giro` a partir da mediana de `itens_vendidos`).
+3. **Visualização comparativa em dois painéis:** Gráfico horizontal com `receita_total` e `peso_frete` nas Top 10 categorias por receita (`analise_categorias_frete.png`), evitando misturar escalas diferentes no mesmo eixo.
+4. **Análise de concentração de giro por produto (Pareto) e exportação:** Agrupamento por `product_id` e `categoria`, cálculo da participação acumulada (`pct_acumulado_giro`) e exportação de `resumo_categorias_giro_frete.csv`, `resumo_produtos_pareto.csv` e `curva_pareto_giro_produtos.png`.
 
 ## Principais Resultados
-- **Volume e catálogo:** `112.108` linhas de itens vendidos válidas, distribuídas em `73` categorias e `32.735` SKUs distintos com venda.
-- **Contraste entre categorias no Top 10 por receita:** Categorias como `moveis_decoracao` (`peso_frete = 0.24`) e `utilidades_domesticas` (`peso_frete = 0.23`) têm peso de frete alto sobre a receita, enquanto `relogios_presentes` combina ticket médio elevado (`R$ 200,70`) com peso de frete baixo (`0.08`).
-- **Concentração do giro (Pareto):** Os **20% produtos mais vendidos (`6.547` SKUs)** concentram **67,2%** de todo o giro de unidades, enquanto os demais `80%` (`26.188` SKUs) dividem os `32,8%` restantes.
-- **Variáveis de maior importância:** `mes_compra` (`0.2376`), `prazo_estimado_dias` (`0.2284`), `valor_frete` (`0.1014`), `proporcao_frete` (`0.0697`) e `valor_produtos` (`0.0677`).
+- **Base analisada:** `112.108` linhas de itens vendidos em pedidos não cancelados, cobrindo `73` categorias únicas e `32.735` SKUs distintos com venda.
+- **Destaques do Top 10 por receita:** `beleza_saude` (`R$ 1.255.695,13`, `peso_frete = 0,14`) lidera em receita, `relogios_presentes` (`R$ 1.198.185,21`) tem o maior ticket médio (`R$ 200,70`) e menor peso relativo de frete (`0,08`), enquanto `moveis_decoracao` (`0,24`) e `utilidades_domesticas` (`0,23`) apresentam os maiores pesos de frete entre as Top 10.
+- **Concentração do giro (Pareto):** Os **20% produtos mais vendidos (`6.547` itens)** respondem por **67,2%** de todo o giro de unidades.
 
 ## Limitações e Recomendações Práticas
-- **Limitação da base:** A base da Olist não contém o custo de aquisição dos produtos (CMV), logo a análise avalia receita, giro e peso de frete — não lucro líquido real.
-- **Ação prática:** Evitar cortar uma categoria inteira (como `ferramentas_jardim`) apenas pela média de frete ou posição no Top 10; em vez disso, revisar regras de frete/região, testar kits/cross-sell para diluir frete e separar SKUs de alto giro dos itens de baixa saída.
+- **Limitação da base:** O dataset público da Olist não traz o custo de aquisição da mercadoria (CMV), portanto os resultados refletem receita, giro e proporção de frete — não margem líquida real.
+- **Recomendações:** Não tomar decisões de corte de categoria inteira apenas pelo `peso_frete` ou pela saída do Top 10; revisar políticas de frete/região, testar kits ou combos para diluir frete e priorizar reposição/sortimento nos SKUs que puxam a maior parte do giro.
 
 ## Ferramentas e Artefatos Gerados
 - **Stack:** Python, `pandas`, `matplotlib`, `seaborn`, `kagglehub` (Google Colab).
-- **Arquivos gerados:** `resumo_categorias_giro_frete.csv`, `resumo_produtos_pareto.csv`, `analise_categorias_frete.png`, `curva_pareto_giro_produtos.png` e `top5_variaveis_importantes.png`.
-
+- **Arquivos gerados:** `resumo_categorias_giro_frete.csv`, `resumo_produtos_pareto.csv`, `analise_categorias_frete.png` e `curva_pareto_giro_produtos.png`.
